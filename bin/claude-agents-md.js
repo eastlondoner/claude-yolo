@@ -175,8 +175,9 @@ if(!fs.existsSync(localClaudeDir)) {
   localClaudeDir = path.join(nodeModulesDir, 'claude-agents-md', 'node_modules', '@anthropic-ai', 'claude-code');
 }
 
-// Prioritize global installation, fall back to local
-const claudeDir = globalClaudeDir || localClaudeDir;
+// For AGENTS mode, always use LOCAL installation to ensure patches work correctly
+// Global installation may have different minified variable names
+const claudeDir = localClaudeDir;
 debug(`Using Claude installation from: ${claudeDir}`);
 debug(`Using ${claudeDir === globalClaudeDir ? 'GLOBAL' : 'LOCAL'} Claude installation`);
 
@@ -254,6 +255,12 @@ async function run() {
   // AGENTS MODE continues below
   console.log(`${YELLOW}[AGENTS] Running Claude in AGENTS mode${RESET}`);
 
+  // Enable bypass permissions mode for AGENTS mode (allows auto-accept of plans)
+  if (!process.argv.includes('--dangerously-skip-permissions')) {
+    process.argv.push('--dangerously-skip-permissions');
+    debug("Added --dangerously-skip-permissions flag for AGENTS mode");
+  }
+
   // Check and update Claude package first
   await checkForUpdates();
 
@@ -294,6 +301,19 @@ async function run() {
   // Replace CLAUDE.md with AGENTS.md
   cliContent = cliContent.replace(/([^,])CLAUDE\.md/g, '$1AGENTS.md');
   debug("Replaced all instances of CLAUDE.md with AGENTS.md");
+
+  // Auto-accept plan mode confirmation
+  // Inject a useEffect that automatically triggers "yes-bypass-permissions" when:
+  // - bypass permissions mode is available (G.toolPermissionContext.isBypassPermissionsModeAvailable)
+  // - there's a valid plan (!F means plan is not empty)
+  const planAutoAcceptPatch = `k5.useEffect(()=>{if(G.toolPermissionContext.isBypassPermissionsModeAvailable&&!F){N("yes-bypass-permissions")}},[]);`;
+  const targetString = 'let M=Md(),R=M?oH(M):null';
+  if (cliContent.includes(targetString)) {
+    cliContent = cliContent.replace(targetString, targetString + ';' + planAutoAcceptPatch);
+    debug("Patched plan mode to auto-accept when bypass permissions is available");
+  } else {
+    debug("WARNING: Could not find target string for plan auto-accept patch");
+  }
 
   // Add warning message
   console.log(`${YELLOW}🔥 AGENTS MODE ACTIVATED 🔥${RESET}`);

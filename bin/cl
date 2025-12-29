@@ -19,7 +19,7 @@ get_mode() {
     if [ -f "$STATE_FILE" ]; then
         cat "$STATE_FILE"
     else
-        echo "CLAUDE"  # Výchozí je bezpečný režim
+        echo "AGENTS"  # Default to AGENTS mode (YOLO!)
     fi
 }
 
@@ -88,14 +88,10 @@ case "$1" in
         # Zobrazit režim před spuštěním
         if [ "$MODE" = "AGENTS" ]; then
             echo -e "${YELLOW}[AGENTS]${RESET} Running Claude in AGENTS.md mode..."
-            # Check if claude-agents-md is installed
-            if command -v claude-agents-md &> /dev/null; then
-                claude-agents-md "$@"
-            else
-                echo -e "${RED}Error: claude-agents-md is not installed${RESET}"
-                echo -e "Install it with: ${CYAN}npm install -g claude-agents-md${RESET}"
-                exit 1
-            fi
+            # Get the directory of this script
+            SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+            # Run the local claude-agents-md.js
+            node "$SCRIPT_DIR/claude-agents-md.js" "$@"
         else
             echo -e "${CYAN}[CLAUDE]${RESET} Running Claude in CLAUDE.md mode..."
             # Check if claude is installed
