@@ -1,6 +1,6 @@
 {
   "name": "claude-agents-md",
-  "version": "1.8.5",
+  "version": "1.9.0",
   "description": "Claude Code CLI but it uses AGENTS.md instead of CLAUDE.md",
   "bin": {
     "claude-agents-md": "./bin/claude-agents-md.js",
