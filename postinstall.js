@@ -9,6 +9,11 @@ const CYAN = '\x1b[36m';
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
 
+// Skip consent prompt when env var is set (for CI/container use)
+if (process.env.CLAUDE_YOLO_SKIP_CONSENT === '1' || process.env.CLAUDE_YOLO_SKIP_CONSENT === 'true') {
+  process.exit(0);
+}
+
 // Create readline interface for user input
 const rl = readline.createInterface({
   input: process.stdin,

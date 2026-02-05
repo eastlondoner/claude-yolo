@@ -41,6 +41,16 @@ const debug = (message) => {
   }
 };
 
+// Silent mode: suppress startup banners and YOLO output
+const isSilent = process.env.CLAUDE_YOLO_SILENT === '1' ||
+                 process.env.CLAUDE_YOLO_SILENT === 'true' ||
+                 process.argv.includes('--silent');
+
+// Skip consent: bypass interactive consent prompt
+const skipConsent = process.env.CLAUDE_YOLO_SKIP_CONSENT === '1' ||
+                    process.env.CLAUDE_YOLO_SKIP_CONSENT === 'true' ||
+                    process.argv.includes('--no-consent');
+
 // Function to ask for user consent
 function askForConsent() {
   return new Promise((resolve) => {
@@ -140,20 +150,20 @@ async function checkForUpdates() {
     
     // If using a specific version (not "latest"), and it's out of date, update
     if (currentVersion !== "latest" && currentVersion !== latestVersion) {
-      console.log(`Updating Claude package from ${currentVersion || 'unknown'} to ${latestVersion}...`);
-      
+      if (!isSilent) console.log(`Updating Claude package from ${currentVersion || 'unknown'} to ${latestVersion}...`);
+
       // Update package.json
       packageJson.dependencies['@anthropic-ai/claude-code'] = latestVersion;
       fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
-      
+
       // Run npm install
-      console.log("Running npm install to update dependencies...");
-      execSync("npm install", { stdio: 'inherit', cwd: nodeModulesDir });
-      console.log("Update complete!");
+      if (!isSilent) console.log("Running npm install to update dependencies...");
+      execSync("npm install", { stdio: isSilent ? 'pipe' : 'inherit', cwd: nodeModulesDir });
+      if (!isSilent) console.log("Update complete!");
     } else if (currentVersion === "latest") {
       // If using "latest", just make sure we have the latest version installed
       debug("Using 'latest' tag in package.json, running npm install to ensure we have the newest version");
-      execSync("npm install", { stdio: 'inherit', cwd: nodeModulesDir });
+      execSync("npm install", { stdio: isSilent ? 'pipe' : 'inherit', cwd: nodeModulesDir });
     }
   } catch (error) {
     console.error("Error checking for updates:", error.message);
@@ -230,17 +240,17 @@ async function run() {
   }
 
   // Check for --safe or --no-yolo flags
-  const safeMode = process.argv.includes('--safe') || 
+  const safeMode = process.argv.includes('--safe') ||
                    process.argv.includes('--no-yolo') ||
                    getMode() === 'SAFE';
-  
+
   if (safeMode) {
     // Remove our flags before passing to original CLI
-    process.argv = process.argv.filter(arg => 
-      arg !== '--safe' && arg !== '--no-yolo'
+    process.argv = process.argv.filter(arg =>
+      arg !== '--safe' && arg !== '--no-yolo' && arg !== '--no-consent' && arg !== '--silent'
     );
     
-    console.log(`${CYAN}[SAFE] Running Claude in SAFE mode${RESET}`);
+    if (!isSilent) console.log(`${CYAN}[SAFE] Running Claude in SAFE mode${RESET}`);
     
     // Update if needed
     await checkForUpdates();
@@ -257,7 +267,7 @@ async function run() {
   }
 
   // YOLO MODE continues below
-  console.log(`${YELLOW}[YOLO] Running Claude in YOLO mode${RESET}`);
+  if (!isSilent) console.log(`${YELLOW}[YOLO] Running Claude in YOLO mode${RESET}`);
 
   // Enable bypass permissions mode for YOLO mode (allows auto-accept of plans)
   if (!process.argv.includes('--dangerously-skip-permissions')) {
@@ -267,7 +277,7 @@ async function run() {
 
   // Temporarily fake non-root for YOLO mode
   if (process.getuid && process.getuid() === 0) {
-    console.log(`${YELLOW}⚠️  Running as root - applying YOLO bypass...${RESET}`);
+    if (!isSilent) console.log(`${YELLOW}⚠️  Running as root - applying YOLO bypass...${RESET}`);
     // Store original getuid
     const originalGetuid = process.getuid;
     // Override getuid to return non-root
@@ -288,24 +298,38 @@ async function run() {
 
   // Check if consent is needed
   const consentNeeded = !fs.existsSync(yoloCliPath) || !fs.existsSync(consentFlagPath);
-  
-  // If consent is needed and not already given, ask for it
+
+  // If consent is needed and not already given, ask for it (unless skipped)
   if (consentNeeded) {
-    const consent = await askForConsent();
-    if (!consent) {
-      // User didn't consent, exit
-      process.exit(1);
-    }
-    
-    // Create a flag file to remember that consent was given
-    try {
-      fs.writeFileSync(consentFlagPath, 'consent-given');
-      debug("Created consent flag file");
-    } catch (err) {
-      debug(`Error creating consent flag file: ${err.message}`);
-      // Continue anyway
+    if (skipConsent) {
+      // Auto-consent: create the flag file silently
+      debug("Consent skipped via CLAUDE_YOLO_SKIP_CONSENT or --no-consent");
+      try {
+        fs.writeFileSync(consentFlagPath, 'consent-given');
+        debug("Created consent flag file (auto-consented)");
+      } catch (err) {
+        debug(`Error creating consent flag file: ${err.message}`);
+      }
+    } else {
+      const consent = await askForConsent();
+      if (!consent) {
+        // User didn't consent, exit
+        process.exit(1);
+      }
+
+      // Create a flag file to remember that consent was given
+      try {
+        fs.writeFileSync(consentFlagPath, 'consent-given');
+        debug("Created consent flag file");
+      } catch (err) {
+        debug(`Error creating consent flag file: ${err.message}`);
+        // Continue anyway
+      }
     }
   }
+
+  // Remove our flags from argv before passing to Claude CLI
+  process.argv = process.argv.filter(arg => arg !== '--no-consent' && arg !== '--silent');
 
   // Read the original CLI file content
   let cliContent = fs.readFileSync(originalCliPath, 'utf8');
@@ -355,7 +379,7 @@ async function run() {
   }
 
   // Add warning message
-  console.log(`${YELLOW}🔥 YOLO MODE ACTIVATED 🔥${RESET}`);
+  if (!isSilent) console.log(`${YELLOW}🔥 YOLO MODE ACTIVATED 🔥${RESET}`);
 
   // Replace the loading messages array with YOLO versions
   const originalArray = '["Accomplishing","Actioning","Actualizing","Baking","Brewing","Calculating","Cerebrating","Churning","Clauding","Coalescing","Cogitating","Computing","Conjuring","Considering","Cooking","Crafting","Creating","Crunching","Deliberating","Determining","Doing","Effecting","Finagling","Forging","Forming","Generating","Hatching","Herding","Honking","Hustling","Ideating","Inferring","Manifesting","Marinating","Moseying","Mulling","Mustering","Musing","Noodling","Percolating","Pondering","Processing","Puttering","Reticulating","Ruminating","Schlepping","Shucking","Simmering","Smooshing","Spinning","Stewing","Synthesizing","Thinking","Transmuting","Vibing","Working"]';
