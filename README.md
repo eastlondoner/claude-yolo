@@ -146,6 +146,43 @@ In SAFE mode, it simply runs the original Claude CLI without modifications.
 
 Sometimes you just want to YOLO and skip those pesky permission checks. But sometimes you want the safety checks back! This fork gives you the best of both worlds.
 
+## Environment Variables for CI / Container Use
+
+When running `claude-yolo` in non-interactive environments (Docker containers, CI pipelines, automated scripts), you can use environment variables to control startup behavior:
+
+| Variable | CLI flag | Effect |
+|----------|----------|--------|
+| `CLAUDE_YOLO_SILENT=1` | `--silent` | Suppress all startup banners (`[YOLO]`, `YOLO MODE ACTIVATED`, root bypass warning), mode indicators (`[SAFE]`), and npm update output (version checks, `npm install` progress) |
+| `CLAUDE_YOLO_SKIP_CONSENT=1` | `--no-consent` | Skip the interactive consent prompt and auto-accept. Also creates the consent flag file so subsequent runs won't prompt either |
+| `DEBUG=1` | — | Show debug output |
+
+All flags and environment variables can be freely combined. Here are common scenarios:
+
+```bash
+# Silent only — no banners, but still prompts for consent on first run
+claude-yolo --silent
+
+# Skip consent only — shows banners, but auto-accepts consent
+claude-yolo --no-consent
+
+# Both — fully non-interactive, no output noise
+claude-yolo --silent --no-consent
+
+# Same with env vars (better for Dockerfiles and CI)
+CLAUDE_YOLO_SILENT=1 CLAUDE_YOLO_SKIP_CONSENT=1 claude-yolo
+
+# Mix and match — env var for one, flag for the other
+CLAUDE_YOLO_SILENT=1 claude-yolo --no-consent
+```
+
+### Dockerfile example
+
+```dockerfile
+ENV CLAUDE_YOLO_SILENT=1
+ENV CLAUDE_YOLO_SKIP_CONSENT=1
+RUN npm install -g claude-yolo
+```
+
 ## Debugging
 
 If you encounter any issues, you can run with debug output:
