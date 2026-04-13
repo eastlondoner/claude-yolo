@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { createRequire } from 'module';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { execSync } from 'child_process';
 import readline from 'readline';
 
@@ -252,7 +252,7 @@ async function run() {
     }
     
     // Run original CLI without modifications
-    await import(originalCliPath);
+    await import(pathToFileURL(originalCliPath));
     return; // Exit early
   }
 
@@ -395,7 +395,7 @@ async function run() {
   debug("Added --dangerously-skip-permissions flag to command line arguments");
 
   // Now import the modified CLI
-  await import(yoloCliPath);
+  await import(pathToFileURL(yoloCliPath));
 }
 
 // Run the main function
